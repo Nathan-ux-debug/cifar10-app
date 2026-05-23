@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, render_template
 import numpy as np
 import tensorflow as tf
 from PIL import Image
-import io, base64, json
+import io, base64
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -14,7 +14,8 @@ app = Flask(__name__)
 CLASS_NAMES = ['airplane','automobile','bird','cat','deer',
                'dog','frog','horse','ship','truck']
 
-model = tf.keras.models.load_model('model/cifar10_model.h5')
+model = tf.keras.models.load_model('model/cifar10_model.h5', compile=False)
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
 def preprocess(img_bytes):
     img = Image.open(io.BytesIO(img_bytes)).convert('RGB').resize((32, 32))
@@ -40,7 +41,6 @@ def predict():
 @app.route('/evaluate')
 def evaluate():
     from tensorflow.keras.datasets import cifar10
-    from tensorflow.keras.utils import to_categorical
     (_, _), (X_test, y_test) = cifar10.load_data()
     X_test = X_test.astype('float32') / 255.0
     y_true = y_test.flatten()
@@ -62,21 +62,23 @@ def evaluate():
     fig, ax = plt.subplots(figsize=(8, 6))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
                 xticklabels=CLASS_NAMES, yticklabels=CLASS_NAMES, ax=ax)
-    ax.set_xlabel('Predicted'); ax.set_ylabel('True')
+    ax.set_xlabel('Predicted')
+    ax.set_ylabel('True')
     ax.set_title('Confusion Matrix — CIFAR-10')
     plt.tight_layout()
     buf = io.BytesIO()
-    plt.savefig(buf, format='png'); buf.seek(0)
+    plt.savefig(buf, format='png')
+    buf.seek(0)
     img_b64 = base64.b64encode(buf.read()).decode()
     plt.close()
 
     overall_acc = float(np.mean(all_preds == y_true)) * 100
     return jsonify({
         'validation_runs': results,
-        'mean_accuracy': round(sum(results)/5, 2),
+        'mean_accuracy': round(sum(results) / 10, 2),
         'test_accuracy': round(overall_acc, 2),
         'confusion_matrix_img': img_b64
     })
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=10000)
